@@ -1,6 +1,7 @@
 from collections import abc
 import itertools
 
+import jax
 import jax.numpy as jnp
 
 
@@ -38,14 +39,28 @@ def nlm_expand_reduce(xs, expand_fn=None, reduce_fn=None):
     return [jnp.concatenate(x, axis=-1) for x in xs]
 
 
+def nlm_permute(x):
+    if x.ndims > 2:
+        x = jnp.concatenate([
+                jnp.transpose(x, list(perm) + [x.ndims - 1])
+                for perm in itertools.permutations(range(x.ndims))
+            ])
+    return x
+
+
 def nlm_layer(xs, mlp_cls, residual=False):
     # If `mlp_cls` is not iterable we assume there is a single, shared
     # constructor for all MLPs.
     if isinstance(mlp_cls, abc.Iterable):
         mlp_cls = itertools.repeat(mlp_cls)
 
-    agg_xs = nlm_expand_reduce(xs)
-    outputs = [mlp()(x) for mlp, x in zip(mlp_cls, agg_xs)]
+    # add a batch dimension to the "preprocessing" step
+    @jax.vmap
+    def _nlm_preprocess(inputs):
+        outputs = nlm_expand_reduce(inputs)
+        return [nlm_permute(x) for x in outputs]
+
+    outputs = [mlp()(x) for mlp, x in zip(mlp_cls, _nlm_preprocess(xs))]
     if residual:
         outputs = [jnp.concatenate(x, -1) for x in zip(outputs, xs)]
 
