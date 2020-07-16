@@ -5,6 +5,10 @@ import jax
 import jax.numpy as jnp
 
 
+EXPAND = "expand"
+REDUCE = "reduce"
+
+
 def nlm_mask(x):
     _mask = mask = 1 - jnp.eye(x.shape[0])
     for _ in range(x.ndim - 2):
@@ -26,16 +30,29 @@ def nlm_expand(x):
     return jnp.broadcast_to(x[..., None, :], expanded_shape)
 
 
-def nlm_expand_reduce(xs, expand_fn=None, reduce_fn=None):
+def nlm_expand_reduce(xs, expand_fn=None, reduce_fn=None, mode=None):
     if expand_fn is None:
         expand_fn = nlm_expand
     if reduce_fn is None:
         reduce_fn = nlm_reduce
 
-    expanded = [expand_fn(x) for x in xs[:-1]]
-    reduced = [reduce_fn(x) for x in xs[1:]]
+    # Shift the reduced and expanded inputs and pad with None.
+    if mode is None:
+        expanded = [None] + [expand_fn(x) for x in xs[:-1]]
+        reduced = [reduce_fn(x) for x in xs[1:]] + [None]
+    elif mode == EXPAND:
+        expanded = [None] + [expand_fn(x) for x in xs]
+        reduced = [reduce_fn(x) for x in xs[1:]] + [None] * 2
+        xs = xs + [None]
+    elif mode == REDUCE:
+        expanded = [None] + [expand_fn(x) for x in xs[:-2]]
+        reduced = [reduce_fn(x) for x in xs[1:]]
+        xs = xs[:-1]
 
-    xs = [(xs[0], reduced[0])] + list(zip(xs[1:], reduced, expanded))
+    # Zip the reduced and expanded values with the inputs and filter out the
+    # None padding.
+    xs = [[v for v in x if v is not None] for x in zip(xs, reduced, expanded)]
+
     return [jnp.concatenate(x, axis=-1) for x in xs]
 
 
@@ -48,16 +65,16 @@ def nlm_permute(x):
     return x
 
 
-def nlm_layer(xs, mlp_cls, residual=False):
+def nlm_layer(xs, mlp_cls, residual=False, mode=None):
     # If `mlp_cls` is not iterable we assume there is a single, shared
     # constructor for all MLPs.
-    if isinstance(mlp_cls, abc.Iterable):
+    if not isinstance(mlp_cls, abc.Iterable):
         mlp_cls = itertools.repeat(mlp_cls)
 
     # add a batch dimension to the "preprocessing" step
     @jax.vmap
     def _nlm_preprocess(inputs):
-        outputs = nlm_expand_reduce(inputs)
+        outputs = nlm_expand_reduce(inputs, mode=mode)
         return [nlm_permute(x) for x in outputs]
 
     outputs = [mlp()(x) for mlp, x in zip(mlp_cls, _nlm_preprocess(xs))]
