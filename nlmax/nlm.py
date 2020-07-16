@@ -65,11 +65,10 @@ def nlm_permute(x):
     return x
 
 
-def nlm_layer(xs, mlp_cls, residual=False, mode=None):
-    # If `mlp_cls` is not iterable we assume there is a single, shared
-    # constructor for all MLPs.
-    if not isinstance(mlp_cls, abc.Iterable):
-        mlp_cls = itertools.repeat(mlp_cls)
+def nlm_layer(xs, mlps, residual=False, mode=None):
+    # If `mlps` is not iterable we assume there is a single, shared callable.
+    if not isinstance(mlps, abc.Iterable):
+        mlps = itertools.repeat(mlps)
 
     # add a batch dimension to the "preprocessing" step
     @jax.vmap
@@ -77,7 +76,7 @@ def nlm_layer(xs, mlp_cls, residual=False, mode=None):
         outputs = nlm_expand_reduce(inputs, mode=mode)
         return [nlm_permute(x) for x in outputs]
 
-    outputs = [mlp()(x) for mlp, x in zip(mlp_cls, _nlm_preprocess(xs))]
+    outputs = [mlp(x) for mlp, x in zip(mlps, _nlm_preprocess(xs))]
     if residual:
         outputs = [jnp.concatenate(x, -1) for x in zip(outputs, xs)]
 
