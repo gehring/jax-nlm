@@ -56,7 +56,7 @@ def nlm_expand_reduce(xs, expand_fn=None, reduce_fn=None, mode=None):
     if reduce_fn is None:
         reduce_fn = nlm_reduce
 
-    # We assume `xs` is sorted by N-narity and second to last axis has dimension
+    # We assume `xs` is sorted by N-arity and second to last axis has dimension
     # equal to the number of objects.
     m = xs[-1].shape[-2]
 
