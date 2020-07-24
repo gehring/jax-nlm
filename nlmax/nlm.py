@@ -1,6 +1,8 @@
 from collections import abc
 import itertools
 
+import gin
+
 import jax
 import jax.numpy as jnp
 
@@ -23,13 +25,18 @@ def nlm_mask(x):
     return jnp.expand_dims(mask, -1)
 
 
-def nlm_reduce(x, mask=None):
+@gin.configurable
+def nlm_reduce(x, mask=None, reduce_fn=None):
     if x is None:
         return None
+
     if mask is None:
         mask = nlm_mask(x)
-    return jnp.concatenate([jnp.max(x * mask, axis=-2),
-                            jnp.min(x * mask + (1 - mask), axis=-2)],
+    if reduce_fn is None:
+        reduce_fn = jnp.max
+
+    return jnp.concatenate([reduce_fn(x * mask, axis=-2),
+                            -reduce_fn(mask - (x*mask + 1), axis=-2)],
                            axis=-1)
 
 
@@ -79,7 +86,7 @@ def nlm_expand_reduce(xs, expand_fn=None, reduce_fn=None, mode=None):
     # None padding.
     xs = [[v for v in x if v is not None] for x in zip(xs, reduced, expanded)]
 
-    return [jnp.concatenate(x, axis=-1) for x in xs]
+    return [jnp.concatenate(x, axis=-1) for x in xs if len(x)]
 
 
 def nlm_permute(x):
@@ -94,6 +101,7 @@ def nlm_permute(x):
     return x
 
 
+@gin.configurable(blacklist=["xs"])
 def nlm_layer(xs, mlps, residual=False, mode=None):
     # If `mlps` is not iterable we assume there is a single, shared callable.
     if not isinstance(mlps, abc.Iterable):
@@ -106,7 +114,13 @@ def nlm_layer(xs, mlps, residual=False, mode=None):
         return [nlm_permute(x) for x in outputs]
 
     outputs = [mlp(x) for mlp, x in zip(mlps, _nlm_preprocess(xs))]
+
     if residual:
-        outputs = [jnp.concatenate(x, -1) for x in zip(outputs, xs)]
+        max_ndim = max([x.ndim for x in outputs])
+        xs = [x for x in xs if x.ndim <= max_ndim]
+
+        outputs = sorted(itertools.chain(outputs, xs), key=lambda x: x.ndim)
+        outputs = itertools.groupby(outputs, key=lambda x: x.ndim)
+        outputs = [jnp.concatenate(list(x), -1) for _, x in outputs]
 
     return outputs
