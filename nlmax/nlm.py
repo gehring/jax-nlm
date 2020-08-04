@@ -116,6 +116,9 @@ def nlm_layer(xs, mlps, residual=False, mode=None):
     outputs = [mlp(x) for mlp, x in zip(mlps, _nlm_preprocess(xs))]
 
     if residual:
+        max_ndim = max([x.ndim for x in outputs])
+        xs = [x for x in xs if x.ndim <= max_ndim]
+
         outputs = sorted(itertools.chain(outputs, xs), key=lambda x: x.ndim)
         outputs = itertools.groupby(outputs, key=lambda x: x.ndim)
         outputs = [jnp.concatenate(list(x), -1) for _, x in outputs]
