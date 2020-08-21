@@ -1,5 +1,7 @@
 from collections import abc
+import functools
 import itertools
+import operator
 
 import gin
 
@@ -20,7 +22,7 @@ def nlm_mask(x):
             masks = []
             for axes in itertools.combinations(range(x.ndim - 1), x.ndim - 3):
                 masks.append(np.expand_dims(mask, axes))
-            mask = np.product(masks)
+            mask = functools.reduce(operator.mul, masks)
 
     return jnp.expand_dims(mask, -1)
 
