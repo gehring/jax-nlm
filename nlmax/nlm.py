@@ -24,7 +24,7 @@ def nlm_mask(x):
                 masks.append(np.expand_dims(mask, axes))
             mask = functools.reduce(operator.mul, masks)
 
-    return jnp.expand_dims(mask, -1)
+    return np.expand_dims(mask, -1)
 
 
 @gin.configurable
