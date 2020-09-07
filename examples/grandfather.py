@@ -42,6 +42,7 @@ def collect_batch(data_generator, n):
 
 def make_network(num_nlm_layers, num_hidden_units, output_dim, max_arity=3):
 
+    @hk.without_apply_rng
     @hk.transform
     def model(inputs):
         assert len(inputs) < num_nlm_layers
