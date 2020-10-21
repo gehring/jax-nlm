@@ -104,7 +104,7 @@ def nlm_permute(x):
 
 
 @gin.configurable(blacklist=["xs"])
-def nlm_layer(xs, mlps, residual=False, mode=None):
+def nlm_layer(xs, mlps, residual=False, with_permute=True, mode=None):
     # If `mlps` is not iterable we assume there is a single, shared callable.
     if not isinstance(mlps, abc.Iterable):
         mlps = itertools.repeat(mlps)
@@ -113,7 +113,9 @@ def nlm_layer(xs, mlps, residual=False, mode=None):
     @jax.vmap
     def _nlm_preprocess(inputs):
         outputs = nlm_expand_reduce(inputs, mode=mode)
-        return [nlm_permute(x) for x in outputs]
+        if with_permute:
+            outputs = [nlm_permute(x) for x in outputs]
+        return outputs
 
     outputs = [mlp(x) for mlp, x in zip(mlps, _nlm_preprocess(xs))]
 
